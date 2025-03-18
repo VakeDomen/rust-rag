@@ -1,11 +1,8 @@
 use std::env;
 use ollama_rs::{
-    error::OllamaError, 
-    generation::{
-        completion::{GenerationResponse, GenerationResponseStream}, 
-        embeddings::{request::GenerateEmbeddingsRequest, GenerateEmbeddingsResponse}
-    }, 
-    Ollama
+    coordinator::Coordinator, error::OllamaError, generation::{
+        chat::ChatMessage, completion::{GenerationResponse, GenerationResponseStream}, embeddings::{request::GenerateEmbeddingsRequest, GenerateEmbeddingsResponse}, tools::ToolGroup
+    }, history::{self, ChatHistory}, Ollama
 };
 
 use crate::shared::{embedding::Embeddable, question::Question};
@@ -13,7 +10,7 @@ use crate::shared::{embedding::Embeddable, question::Question};
 
 #[derive(Debug)]
 pub struct OllamaService {
-    ollama: Ollama,
+    pub conn: Ollama,
 }
 
 impl Default for OllamaService {
@@ -23,7 +20,7 @@ impl Default for OllamaService {
         let ollama_port: u16 = ollama_port.parse().expect("OLLAMA_PORT not u16");
 
         Self { 
-            ollama: Ollama::new(ollama_host, ollama_port) 
+            conn: Ollama::new(ollama_host, ollama_port) 
         }
     }
 }
@@ -32,16 +29,22 @@ impl OllamaService {
 
     pub fn new(host: String, port: u16) -> Self {
         Self { 
-            ollama: Ollama::new(host, port) 
+            conn: Ollama::new(host, port) 
         }
     }
 
+    pub async fn new_chat(&self, question: Question) -> Coordinator<Vec<ChatMessage>, ()> {
+        Coordinator::new(self.conn.clone(), question.get_model(), vec![
+            ChatMessage::system(question.get_system_prompt()),
+        ])
+    }
+
     pub async fn generate(&self, question: Question) -> Result<GenerationResponse, OllamaError> {
-        self.ollama.generate(question.into()).await
+        self.conn.generate(question.into()).await
     }
 
     pub async fn generate_stream(&self, question: Question) -> Result<GenerationResponseStream, OllamaError> {
-        self.ollama.generate_stream(question.into()).await
+        self.conn.generate_stream(question.into()).await
     }
 
     pub async fn generate_all(&self, questions: Vec<Question>) -> Vec<Result<GenerationResponse, OllamaError>> {
@@ -74,7 +77,7 @@ impl OllamaService {
 
 
     pub async fn embed_req(&self, req: GenerateEmbeddingsRequest) -> Result<GenerateEmbeddingsResponse, OllamaError> {
-        self.ollama.generate_embeddings(req).await
+        self.conn.generate_embeddings(req).await
     }
 
     pub async fn embed(&self, emb: &dyn Embeddable) -> Result<GenerateEmbeddingsResponse, OllamaError> {

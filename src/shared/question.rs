@@ -32,6 +32,18 @@ impl From<&str> for Question {
 
 impl Into<GenerationRequest<'_>> for Question {
     fn into(self) -> GenerationRequest<'static> {
+        let final_prompt: &'static str = Box::leak(self.get_prompt().into_boxed_str());
+        GenerationRequest::new(self.model, final_prompt)
+    }
+}
+
+impl Question {
+    pub fn set_system_prompt(mut self, prompt: &str) -> Self {
+        self.system_prompt = prompt.to_string();
+        self
+    }
+
+    pub fn get_prompt(&self) -> String {
         let context = if self.context.is_empty() {
             "".to_string()
         } else {
@@ -44,16 +56,7 @@ impl Into<GenerationRequest<'_>> for Question {
             self.question,
             context
         );
-        let final_prompt: &'static str = Box::leak(final_prompt.into_boxed_str());
-
-        GenerationRequest::new(self.model, final_prompt)
-    }
-}
-
-impl Question {
-    pub fn set_system_prompt(mut self, prompt: &str) -> Self {
-        self.system_prompt = prompt.to_string();
-        self
+        final_prompt
     }
 
     pub fn set_model(mut self, model: &str) -> Self {
@@ -69,5 +72,13 @@ impl Question {
     pub fn set_context(mut self, context: Vec<String>) -> Self {
         self.context = context;
         self
+    }
+
+    pub fn get_system_prompt(&self) -> String {
+        self.system_prompt.clone()
+    }
+
+    pub fn get_model(&self) -> String {
+        self.model.clone()
     }
 }
